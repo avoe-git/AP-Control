@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wi-Fi Portal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url('bg.png'); /* Replace with your custom background image */
+            background-size: cover;
+            background-position: center;
+        }
+
+        .container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            /* box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); */
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            background: rgba(179,225,216,0.8); /* Remove the card background */
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 400px; /* Square frame */
+            margin: 0 auto;
+            border: 2px solid #28a745;
+            border-radius: 8px;
+            background: black;
+            overflow: hidden;
+            animation: flicker 1s infinite;
+            animation-play-state: paused; /* Pause animation by default */
+        }
+
+        @keyframes flicker {
+            0%, 100% { border-color: #28a745; }
+            50% { border-color: #a1e8a4; }
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .template {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            border: 4px solid #ddd;
+            border-radius: 10px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .template.inactive {
+            border-color: #999;
+        }
+
+        .template.detecting {
+            border-color: #ccc;
+        }
+
+        .template.success {
+            border-color: #28a745;
+        }
+
+        .template.error {
+            border-color: #d9534f;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #qrResult, #authStatus {
+            margin-top: 15px;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        #authStatus {
+            font-size: 1.2rem;
+        }
+
+        #uniqueCodeContainer {
+            margin-top: 15px;
+        }
+
+        #uniqueCodeInput {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 400px;
+        }
+
+        #submitCodeButton {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        #submitCodeButton:hover {
+            background-color: #0056b3;
+        }
+
+        #instructions {
+            font-size: 1.2rem;
+            color: #666;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>№ 211 Wi-Fi Girişi</h1>
+        <div id="instructions">Daxil olmaq üçün QR kodu skan et və ya unikal kodu təsdiqlə. Bu QR kodu və ya unikal kodu 211-ci otağın qapısı üzərindəki vərəqdən əldə edə bilərsiniz.</div>
+        <div class="camera-container" id="cameraContainer">
+            <video id="video" autoplay></video>
+            <div class="template" id="qrTemplate"></div>
+        </div>
+        <button id="toggleScan">Skan et</button>
+        <div id="uniqueCodeContainer">
+            <input type="text" id="uniqueCodeInput" placeholder="Unikal kodu daxil et">
+            <button id="submitCodeButton">Kodu təsdiqlə</button>
+        </div>
+        <p id="qrResult">QR kod daxil et...</p>
+        <p id="authStatus"></p>
+    </div>
+
+    <!-- QR Code Scanning Library -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+    <script>
+      const video = document.getElementById('video');
+      const qrResult = document.getElementById('qrResult');
+      const authStatus = document.getElementById('authStatus');
+      const toggleScanBtn = document.getElementById('toggleScan');
+      const uniqueCodeInput = document.getElementById('uniqueCodeInput');
+      const submitCodeButton = document.getElementById('submitCodeButton');
+      const qrTemplate = document.getElementById('qrTemplate');
+      const cameraContainer = document.getElementById('cameraContainer');
+      const instructions = document.getElementById('instructions');
+      
+      const VALID_TOKENS = [
+          'abc123',
+          'def456',
+          'ghi789'
+      ];
+      
+      let scanning = false;
+      let authenticated = false; // Flag to stop scanning after successful authentication
+      
+      function startVideo() {
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+              .then(stream => {
+                  video.srcObject = stream;
+                  video.setAttribute('playsinline', true); // Ensure inline play for mobile
+                  video.play();
+                  qrTemplate.classList.add('inactive');
+                  cameraContainer.style.animationPlayState = 'running'; // Start flickering animation
+                  instructions.textContent = 'Skan edilir...';
+                  scanQRCode(); // Start QR scanning
+              })
+              .catch(err => {
+                  console.error('Error: Kameraya giriş edilmədi ', err);
+                  qrTemplate.classList.add('error');
+                  instructions.textContent = 'Kamera icazəsi mütləqdir!';
+              });
+      }
+      
+      function scanQRCode() {
+          const canvas = document.createElement('canvas');
+          const canvasContext = canvas.getContext('2d');
+      
+          function tick() {
+              if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+                  canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                  const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                  const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                      inversionAttempts: 'dontInvert',
+                  });
+      
+                  if (code) {
+                      const codeText = code.data;
+                      const shortenedText = codeText.length > 10 ? `${codeText.slice(0, 10)}...` : codeText;
+                      qrResult.textContent = `QR kod tapıldı: ${shortenedText}`;
+                      authenticateUser(codeText);
+                  } else {
+                      qrResult.textContent = 'QR kod tapılmadı...';
+                      qrTemplate.classList.remove('success', 'error');
+                      qrTemplate.classList.add('detecting');
+                  }
+              }
+      
+              if (scanning && !authenticated) {
+                  requestAnimationFrame(tick);
+              }
+          }
+      
+          tick();
+      }
+      
+        function authenticateUser(token) {
+        if (VALID_TOKENS.includes(token)) {
+            qrTemplate.classList.remove('inactive', 'detecting', 'error');
+            qrTemplate.classList.add('success');
+            authStatus.textContent = 'Uğurlu giriş!';
+            authStatus.style.color = '#5bc0de'; // Blue color for success
+
+            // Stop the camera feed
+            scanning = false;
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            cameraContainer.style.animationPlayState = 'paused'; // Stop flickering animation
+
+            // Hide the camera and show the GIF
+            video.style.display = 'none'; // Hide the video
+            const gifElement = document.createElement('img');
+            gifElement.src = 'success2.gif'; // Set your GIF path here
+            // gifElement.style.width = '200px'; 
+            // gifElement.style.height = '200px'; 
+            gifElement.style.position = 'absolute'; // Center it on top of the camera
+            gifElement.style.top = '50%';
+            gifElement.style.left = '50%';
+            gifElement.style.transform = 'translate(-50%, -50%)'; // Centering the GIF
+            cameraContainer.appendChild(gifElement); // Add the GIF to the camera container
+
+            // Redirect after showing the GIF
+            setTimeout(() => {
+                window.location.href = 'success.html?auth=1';
+            }, 2000); // Redirect after 2 seconds
+        } else {
+            qrTemplate.classList.remove('inactive', 'detecting', 'success');
+            qrTemplate.classList.add('error');
+            authStatus.textContent = 'Yanlış kod, yenidən yoxlayın! ';
+            authStatus.style.color = '#d9534f'; // Red color for error
+        }
+}
+
+
+      
+      function stopScanning() {
+          scanning = false; // Stop scanning
+          const stream = video.srcObject;
+          if (stream) {
+              stream.getTracks().forEach(track => track.stop()); // Stop the camera stream
+          }
+          cameraContainer.style.animationPlayState = 'paused'; // Stop flickering animation
+      }
+      
+      toggleScanBtn.addEventListener('click', () => {
+          if (scanning) {
+              scanning = false;
+              toggleScanBtn.textContent = 'Start Scanning';
+              stopScanning(); // Stop scanning and camera
+              authStatus.textContent = ''; // Clear authentication status
+              instructions.textContent = 'Daxil olmaq üçün QR kodu skan et və ya unikal kodu təsdiqlə.';
+          } else {
+              scanning = true;
+              authenticated = false; // Reset authentication flag
+              toggleScanBtn.textContent = 'Skanı dayandır';
+              startVideo(); // Start the camera and scanning
+          }
+      });
+      
+      submitCodeButton.addEventListener('click', () => {
+          const uniqueCode = uniqueCodeInput.value.trim();
+          authenticateUser(uniqueCode); // Authenticate via text input
+      });
+      
+      // Set initial state
+      qrResult.textContent = 'QR kod tapılmadı...';
+      authStatus.textContent = '';
+      </script>
+</body>
+</html>

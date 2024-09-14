@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Authentication</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            position: relative; /* To position the recording icon */
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 400px; /* Square frame */
+            margin: 0 auto;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: black;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .template {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            border: 4px solid #ddd;
+            border-radius: 10px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .template.inactive {
+            border-color: #999;
+        }
+
+        .template.detecting {
+            border-color: #ccc;
+        }
+
+        .template.success {
+            border-color: #28a745;
+        }
+
+        .template.error {
+            border-color: #d9534f;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #qrResult, #authStatus {
+            margin-top: 15px;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        #authStatus {
+            font-size: 1.2rem;
+        }
+
+        #uniqueCodeContainer {
+            margin-top: 15px;
+        }
+
+        #uniqueCodeInput {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 400px;
+        }
+
+        #submitCodeButton {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+
+        #submitCodeButton:hover {
+            background-color: #0056b3;
+        }
+
+        #instructions {
+            font-size: 1.2rem;
+            color: #666;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QR Code Authentication</h1>
+        <div id="instructions">Please start scanning to authenticate.</div>
+        <div class="camera-container">
+            <video id="video" autoplay></video>
+            <div class="template" id="qrTemplate"></div>
+        </div>
+        <button id="toggleScan">Start Scanning</button>
+        <div id="uniqueCodeContainer">
+            <input type="text" id="uniqueCodeInput" placeholder="Enter your unique code">
+            <button id="submitCodeButton">Submit Code</button>
+        </div>
+        <p id="qrResult">No QR Code detected yet...</p>
+        <p id="authStatus"></p>
+    </div>
+
+    <!-- QR Code Scanning Library -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+    <script>
+        const video = document.getElementById('video');
+        const qrResult = document.getElementById('qrResult');
+        const authStatus = document.getElementById('authStatus');
+        const toggleScanBtn = document.getElementById('toggleScan');
+        const uniqueCodeInput = document.getElementById('uniqueCodeInput');
+        const submitCodeButton = document.getElementById('submitCodeButton');
+        const qrTemplate = document.getElementById('qrTemplate');
+        const instructions = document.getElementById('instructions');
+
+        const VALID_TOKENS = [
+            'abc123',
+            'def456',
+            'ghi789'
+        ];
+
+        let scanning = false;
+
+        function startVideo() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.setAttribute('playsinline', true); // Ensure inline play for mobile
+                    video.play();
+                    qrTemplate.classList.add('inactive');
+                    instructions.textContent = 'Scanning QR code...';
+                    scanQRCode();
+                })
+                .catch(err => {
+                    console.error('Error accessing camera: ', err);
+                    qrTemplate.classList.add('error');
+                    instructions.textContent = 'Camera access is required.';
+                });
+        }
+
+        function scanQRCode() {
+            const canvas = document.createElement('canvas');
+            const canvasContext = canvas.getContext('2d');
+
+            function tick() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                        inversionAttempts: 'dontInvert',
+                    });
+
+                    if (code) {
+                        const codeText = code.data;
+                        const shortenedText = codeText.length > 10 ? `${codeText.slice(0, 10)}...` : codeText;
+                        qrResult.textContent = `QR Code detected: ${shortenedText}`;
+                        authenticateUser(codeText);
+                    } else {
+                        qrResult.textContent = 'No QR Code detected yet...';
+                        qrTemplate.classList.remove('success', 'error');
+                        qrTemplate.classList.add('detecting');
+                    }
+                }
+
+                if (scanning) {
+                    requestAnimationFrame(tick);
+                }
+            }
+
+            tick();
+        }
+
+        function authenticateUser(token) {
+            if (VALID_TOKENS.includes(token)) {
+                qrTemplate.classList.remove('inactive', 'detecting', 'error');
+                qrTemplate.classList.add('success');
+                authStatus.textContent = 'Uğurlu giriş!';
+                authStatus.style.color = '#5bc0de'; // Blue color for success
+
+                // Redirect to the success page with auth=1 query parameter
+                setTimeout(() => {
+                    window.location.href = 'success.html?auth=1';
+                }, 10); // Redirect after 1 second to ensure the user sees the success message
+            } else {
+                qrTemplate.classList.remove('inactive', 'detecting', 'success');
+                qrTemplate.classList.add('error');
+                authStatus.textContent = 'Yanlış kod. Yenidən yoxlayın.';
+                authStatus.style.color = '#d9534f'; // Red color for error
+            }
+        }
+
+        toggleScanBtn.addEventListener('click', () => {
+            if (scanning) {
+                scanning = false;
+                toggleScanBtn.textContent = 'Start Scanning';
+                const stream = video.srcObject;
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                authStatus.textContent = ''; // Clear authentication status
+                instructions.textContent = 'Please start scanning to authenticate.';
+            } else {
+                scanning = true;
+                toggleScanBtn.textContent = 'Stop Scanning';
+                startVideo();
+            }
+        });
+
+        submitCodeButton.addEventListener('click', () => {
+            const uniqueCode = uniqueCodeInput.value.trim();
+            authenticateUser(uniqueCode);
+        });
+    </script>
+</body>
+</html>

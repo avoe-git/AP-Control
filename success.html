@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Success</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('bg.png'); /* Replace with your custom background image */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+
+        .container {
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(179,225,216,0.8);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        h1 {
+            color: green;
+        }
+
+        #countdown {
+            font-size: 1.2rem;
+            color: #333;
+            margin-top: 10px;
+        }
+
+        #success-gif {
+            /*width: 150px;  Adjust size as needed */
+            border: solid black 1px;
+            border-radius: 6px;
+            background: rgba(179,225,216,0.8);
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            margin: 5px;
+            padding: 5px;
+            transform: translateX(-50%);
+            animation: slow-down 5s linear infinite; /* Slow GIF animation */
+        }
+
+        @keyframes slow-down {
+            from {
+                transform: translateX(-50%) scale(1);
+            }
+            to {
+                transform: translateX(-50%) scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Success GIF -->
+        <img id="success-gif" src="wifi.gif" alt="Success"> <!-- Replace with your GIF file -->
+
+        <h1>Uğurlu Giriş!</h1>
+        <p id="countdown">_ saniyədən sonra yönləndiriləcəksiniz. Bu səhifəni bağlaya bilərsiniz.</p>
+    </div>
+
+    <script>
+        let countdownValue = 5; // Countdown starting value in seconds
+        const countdownElement = document.getElementById('countdown');
+
+        function updateCountdown() {
+            if (countdownValue > 0) {
+                countdownElement.textContent = `${countdownValue} saniyədən sonra yönləndiriləcəksiniz. Bu səhifəni bağlaya bilərsiniz...`;
+                countdownValue--;
+            } else {
+                window.location.href = "https://google.com"; // Redirect URL (Replace with your URL)
+            }
+        }
+
+        setInterval(updateCountdown, 1000); // Update every 1 second
+    </script>
+</body>
+</html>
